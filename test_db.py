@@ -12,7 +12,8 @@ class DatabaseTester:
         self.failures = []
         self.start_time = time.time()
 
-    def run_db_command(self, commands):
+    def run_script(self, commands):
+        """Equivalent to Ruby's run_script - returns array of output lines"""
         process = subprocess.Popen(
             ["./db"],
             stdin=subprocess.PIPE,
@@ -21,49 +22,37 @@ class DatabaseTester:
             text=True,
         )
 
-        if isinstance(commands, list):
-            input_str = "\n".join(commands) + "\n"
-        else:
-            input_str = commands
-
+        # Send each command (like Ruby's pipe.puts command)
+        input_str = "\n".join(commands) + "\n"
         stdout, stderr = process.communicate(input=input_str)
-        return stdout.strip()
 
-    def run_test(self, test_name, commands, expected):
+        # Return array of lines (like Ruby's raw_output.split("\n"))
+        return stdout.strip().split("\n") if stdout.strip() else []
+
+    def match_array(self, actual, expected):
+        """Compare arrays like Ruby's match_array (order doesn't matter)"""
+        return sorted(actual) == sorted(expected)
+
+    def run_test(self, test_name, commands, expected_array):
+        """Run a test case - matches Ruby structure"""
         self.total_tests += 1
 
         try:
-            actual = self.run_db_command(commands)
+            result = self.run_script(commands)
 
-            if actual == expected:
+            if self.match_array(result, expected_array):
                 print(".", end="", flush=True)
                 self.passed_tests += 1
             else:
                 print("F", end="", flush=True)
                 self.failed_tests += 1
                 self.failures.append(
-                    {"name": test_name, "expected": expected, "actual": actual}
+                    {"name": test_name, "expected": expected_array, "actual": result}
                 )
         except Exception as e:
             print("E", end="", flush=True)
             self.failed_tests += 1
             self.failures.append({"name": test_name, "error": str(e)})
-
-    def test_max_string_length(self):
-        """Test inserting strings at maximum allowed length"""
-        test_name = "allows inserting strings that are the maximum length"
-
-        # Generate maximum length strings
-        long_username = "a" * 32  # 32 characters
-        long_email = "a" * 255  # 255 characters
-
-        commands = [f"insert 1 {long_username} {long_email}", "select", ".exit"]
-
-        expected = (
-            f"db > Executed.\ndb > (1, {long_username}, {long_email})\nExecuted.\ndb > "
-        )
-
-        self.run_test(test_name, commands, expected)
 
     def test_table_full(self):
         """Test that database shows error when table is full"""
@@ -71,40 +60,28 @@ class DatabaseTester:
         self.total_tests += 1
 
         try:
-            # Generate 1401 insert commands
-            commands = []
+            # Generate script like Ruby: (1..1401).map
+            script = []
             for i in range(1, 1402):
-                commands.append(f"insert {i} user{i} person{i}@example.com")
-            commands.append(".exit")
+                script.append(f"insert {i} user{i} person{i}@example.com")
+            script.append(".exit")
 
-            # Run the test
-            result = self.run_db_command(commands)
-            result_lines = result.split("\n")
+            result = self.run_script(script)
 
-            # Check second-to-last line
-            if len(result_lines) >= 2:
-                second_last_line = result_lines[-2]
-                if second_last_line == "db > Error: Table full.":
-                    print(".", end="", flush=True)
-                    self.passed_tests += 1
-                else:
-                    print("F", end="", flush=True)
-                    self.failed_tests += 1
-                    self.failures.append(
-                        {
-                            "name": test_name,
-                            "expected": "db > Error: Table full.",
-                            "actual": second_last_line,
-                            "context": f"Last 5 lines: {result_lines[-5:]}",
-                        }
-                    )
+            # Check second-to-last element (like Ruby result[-2])
+            if len(result) >= 2 and result[-2] == "db > Error: Table full.":
+                print(".", end="", flush=True)
+                self.passed_tests += 1
             else:
                 print("F", end="", flush=True)
                 self.failed_tests += 1
+                second_last = result[-2] if len(result) >= 2 else "Not enough output"
                 self.failures.append(
                     {
                         "name": test_name,
-                        "error": f"Not enough output lines. Got: {result_lines}",
+                        "expected": "db > Error: Table full.",
+                        "actual": second_last,
+                        "context": f"Full result length: {len(result)}, last 5: {result[-5:] if len(result) >= 5 else result}",
                     }
                 )
 
@@ -121,22 +98,24 @@ class DatabaseTester:
         # Show failures
         if self.failures:
             print("\nFailures:")
-            for i, failure in enumerate(self.failures, 1):
-                print(f"\n{i}) {failure['name']}")
+            for failure in self.failures:
+                print(f"FAILURE: {failure['name']}")
                 if "error" in failure:
-                    print(f"   Error: {failure['error']}")
+                    print(f"Error: {failure['error']}")
                 else:
-                    print(f"   Expected: {repr(failure['expected'])}")
-                    print(f"   Actual:   {repr(failure['actual'])}")
+                    print(f"Expected: {failure['expected']}")
+                    print(f"Actual: {failure['actual']}")
                     if "context" in failure:
-                        print(f"   Context: {failure['context']}")
+                        print(failure["context"])
+                print("---")
 
         # Summary
-        print(f"\nFinished in {duration:.5f} seconds")
-
+        print()
         if self.failed_tests == 0:
+            print(f"\033[32mFinished in {duration:.5f} seconds\033[0m")
             print(f"\033[32m{self.total_tests} examples, 0 failures\033[0m")
         else:
+            print(f"\033[31mFinished in {duration:.5f} seconds\033[0m")
             print(
                 f"\033[31m{self.total_tests} examples, {self.failed_tests} failures\033[0m"
             )
@@ -147,17 +126,73 @@ def main():
 
     print("Running database tests...")
 
-    # Test 1: Basic functionality
+    # Test 1: Basic functionality (exactly like Ruby)
     tester.run_test(
         "inserts and retrieves a row",
-        ["insert 1 user1 person1@example.com", "select", ".exit"],
-        "db > Executed.\ndb > (1, user1, person1@example.com)\nExecuted.\ndb > ",
+        [
+            "insert 1 user1 person1@example.com",
+            "select",
+            ".exit",
+        ],
+        [
+            "db > Executed.",
+            "db > (1, user1, person1@example.com)",
+            "Executed.",
+            "db > ",
+        ],
     )
 
-    # Test 2: Maximum string lengths
-    tester.test_max_string_length()
+    # Test 2: Maximum string lengths (exactly like Ruby)
+    long_username = "a" * 32
+    long_email = "a" * 255
+    tester.run_test(
+        "allows inserting strings that are the maximum length",
+        [
+            f"insert 1 {long_username} {long_email}",
+            "select",
+            ".exit",
+        ],
+        [
+            "db > Executed.",
+            f"db > (1, {long_username}, {long_email})",
+            "Executed.",
+            "db > ",
+        ],
+    )
 
-    # Test 3: Table full scenario
+    # Test 3: String too long (exactly like Ruby)
+    long_username = "a" * 33
+    long_email = "a" * 256
+    tester.run_test(
+        "prints error message if strings are too long",
+        [
+            f"insert 1 {long_username} {long_email}",
+            "select",
+            ".exit",
+        ],
+        [
+            "db > String is too long.",
+            "db > Executed.",
+            "db > ",
+        ],
+    )
+
+    # Test 4: Negative ID validation (exactly like Ruby)
+    tester.run_test(
+        "prints an error message if id is negative",
+        [
+            "insert -1 cstack foo@bar.com",
+            "select",
+            ".exit",
+        ],
+        [
+            "db > ID must be positive.",
+            "db > Executed.",
+            "db > ",
+        ],
+    )
+
+    # Test 5: Table full scenario
     tester.test_table_full()
 
     tester.print_summary()
