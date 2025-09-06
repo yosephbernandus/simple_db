@@ -38,8 +38,8 @@ typedef struct {
 
 typedef struct {
   uint32_t id;
-  char username[COLUMN_USERNAME_SIZE];
-  char email[COLUMN_EMAIL_SIZE];
+  char username[COLUMN_USERNAME_SIZE + 1];
+  char email[COLUMN_EMAIL_SIZE + 1];
 } Row;
 
 typedef struct {
@@ -93,7 +93,6 @@ void close_input_buffer(InputBuffer *input_buffer) {
   free(input_buffer);
 }
 
-
 MetaCommandResult do_meta_command(InputBuffer *input_buffer) {
   if (strcmp(input_buffer->buffer, ".exit") == 0) {
     close_input_buffer(input_buffer);
@@ -122,7 +121,6 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
 
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
-
 
 void serialize_row(Row *source, void *destination) {
   memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
