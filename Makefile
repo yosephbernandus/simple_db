@@ -1,2 +1,2 @@
 run:
-	gcc -o main main.c
+	gcc -o db main.c
