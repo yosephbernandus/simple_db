@@ -54,6 +54,73 @@ class DatabaseTester:
             self.failed_tests += 1
             self.failures.append({"name": test_name, "error": str(e)})
 
+    def test_persistence(self):
+        """Test that data persists after closing connection"""
+        test_name = "keeps data after closing connection"
+        self.total_tests += 1
+
+        try:
+            # First connection: insert data and exit
+            result1 = self.run_script(
+                [
+                    "insert 1 user1 person1@example.com",
+                    ".exit",
+                ]
+            )
+
+            expected1 = [
+                "db > Executed.",
+                "db > ",
+            ]
+
+            # Check first result
+            if not self.match_array(result1, expected1):
+                print("F", end="", flush=True)
+                self.failed_tests += 1
+                self.failures.append(
+                    {
+                        "name": f"{test_name} (part 1: insert)",
+                        "expected": expected1,
+                        "actual": result1,
+                    }
+                )
+                return
+
+            # Second connection: select data and verify it's still there
+            result2 = self.run_script(
+                [
+                    "select",
+                    ".exit",
+                ]
+            )
+
+            expected2 = [
+                "db > (1, user1, person1@example.com)",
+                "Executed.",
+                "db > ",
+            ]
+
+            # Check second result
+            if self.match_array(result2, expected2):
+                print(".", end="", flush=True)
+                self.passed_tests += 1
+            else:
+                print("F", end="", flush=True)
+                self.failed_tests += 1
+                self.failures.append(
+                    {
+                        "name": f"{test_name} (part 2: select after reconnect)",
+                        "expected": expected2,
+                        "actual": result2,
+                        "context": f"First insert result was: {result1}",
+                    }
+                )
+
+        except Exception as e:
+            print("E", end="", flush=True)
+            self.failed_tests += 1
+            self.failures.append({"name": test_name, "error": str(e)})
+
     def test_table_full(self):
         """Test that database shows error when table is full"""
         test_name = "prints error message when table is full"
@@ -192,7 +259,10 @@ def main():
         ],
     )
 
-    # Test 5: Table full scenario
+    # Test 5: Data persistence (exactly like Ruby)
+    tester.test_persistence()
+
+    # Test 6: Table full scenario
     tester.test_table_full()
 
     tester.print_summary()
