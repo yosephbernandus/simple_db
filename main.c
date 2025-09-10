@@ -341,13 +341,24 @@ Pager *pager_open(const char *filename) {
   }
 
   off_t file_length = lseek(fd, 0, SEEK_END);
+  Pager *pager = malloc(sizeof(Pager));
+  pager->file_descriptor = fd;
+  pager->file_length = file_length;
+
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    pager->pages[i] = NULL;
+  }
+
+  return pager;
 }
 
 Table *db_open(const char *filename) {
   Pager *pager = pager_open(filename);
   uint32_t num_rows = pager->file_length / ROW_SIZE;
 
-  Table *table = (Table *)malloc(sizeof(Table));
+  // Table *table = (Table *)malloc(sizeof(Table));
+  Table *table = malloc(sizeof(Table));
+
   table->pager = pager;
   table->num_rows = num_rows;
   return table;
